@@ -75,11 +75,18 @@ class GoogleMapPlotter(object):
         kwargs["color"] = color
         kwargs["size"] = size
         settings = self._process_kwargs(kwargs)
-        for lat, lng in zip(lats, lngs):
-            if marker:
-                self.marker(lat, lng, settings['color'])
-            else:
-                self._add_symbol(Symbol(symbol, lat, lng, size), **settings)
+        if type(size) == list:
+            for lat, lng, symbol_size in zip(lats, lngs, size):
+                if marker:
+                    self.marker(lat, lng, settings['color'])
+                else:
+                    self._add_symbol(Symbol(symbol, lat, lng, symbol_size), **settings)
+        else:
+            for lat, lng in zip(lats, lngs):
+                if marker:
+                    self.marker(lat, lng, settings['color'])
+                else:
+                    self._add_symbol(Symbol(symbol, lat, lng, size), **settings)
 
     def _add_symbol(self, symbol, color=None, c=None, **kwargs):
         color = color or c
@@ -135,11 +142,22 @@ class GoogleMapPlotter(object):
         settings["closed"] = kwargs.get("closed", None)
         return settings
 
-    def plot(self, lats, lngs, color=None, c=None, **kwargs):
+    def plot(self, lats, lngs, values=None, color=None, c=None, **kwargs):
         color = color or c
         kwargs.setdefault("color", color)
         settings = self._process_kwargs(kwargs)
-        path = zip(lats, lngs)
+        if values:
+            colors = []
+            for value in values:
+                if value < 15:
+                    colors.append("#D2222D")
+                elif value < 30:
+                    colors.append("#FFBF00")
+                else:
+                    colors.append("#32D132")
+            path = zip(lats, lngs, colors)
+        else:
+            path = zip(lats, lngs)
         self.paths.append((path, settings))
 
     def heatmap(self, lats, lngs, threshold=10, radius=10, gradient=None, opacity=0.6, maxIntensity=1, dissipating=True):
@@ -308,7 +326,17 @@ class GoogleMapPlotter(object):
 
     def write_paths(self, f):
         for path, settings in self.paths:
-            self.write_polyline(f, path, settings)
+            prev = None
+            for idx, tup in enumerate(list(path)):
+                if idx == 0:
+                    prev = tup
+                    continue
+
+                if len(tup) == 3:
+                    self.write_polyline(f, [(prev[0], prev[1]), (tup[0], tup[1])], settings, tup[2])
+                else:
+                    self.write_polyline(f, [(prev[0], prev[1]), (tup[0], tup[1])], settings)
+                prev = tup
 
     def write_shapes(self, f):
         for shape, settings in self.shapes:
@@ -365,10 +393,10 @@ class GoogleMapPlotter(object):
                               strokeOpacity=strokeOpacity, strokeWeight=strokeWeight,
                               fillColor=fillColor, fillOpacity=fillOpacity))
 
-    def write_polyline(self, f, path, settings):
+    def write_polyline(self, f, path,  settings, color=None):
         clickable = False
         geodesic = True
-        strokeColor = settings.get('color') or settings.get('edge_color')
+        strokeColor = color or settings.get('color') or settings.get('edge_color')
         strokeOpacity = settings.get('edge_alpha')
         strokeWeight = settings.get('edge_width')
 
